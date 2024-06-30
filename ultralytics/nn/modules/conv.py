@@ -49,6 +49,7 @@ class Conv(nn.Module):
         nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, x):
+        print("conv")
         return self.act(self.bn(self.conv(x)))
 
 class Conv2(Conv):
@@ -62,6 +63,7 @@ class Conv2(Conv):
         self.alpha = nn.Parameter(torch.tensor([0.5]))
         
     def forward(self, x):
+        print("con2")
         return self.act(self.bn(self.alpha * self.conv(x) + (1 - self.alpha) * self.cv2(x)))
 
     def fuse_convs(self):
