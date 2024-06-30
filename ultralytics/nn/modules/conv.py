@@ -51,7 +51,9 @@ class Conv(nn.Module):
     def forward(self, x):
         print("conv")
         return self.act(self.bn(self.conv(x)))
-
+    def forward_fuse(self, x):
+        """Perform fused convolution."""
+        return self.act(self.conv(x))
 class Conv2(Conv):
     """Enhanced RepConv module with potential accuracy improvements."""
     def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True):
@@ -65,7 +67,11 @@ class Conv2(Conv):
     def forward(self, x):
         print("con2")
         return self.act(self.bn(self.alpha * self.conv(x) + (1 - self.alpha) * self.cv2(x)))
+    def forward_fuse(self, x):
+        """Perform fused convolution."""
+        return self.act(self.conv(x))
 
+    
     def fuse_convs(self):
         w = self.alpha.item() * self.conv.weight.data + (1 - self.alpha.item()) * F.pad(self.cv2.weight.data, 
                                                   [self.conv.weight.size(2)//2]*4, mode='constant', value=0)
