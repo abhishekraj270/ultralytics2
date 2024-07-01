@@ -36,7 +36,7 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+print("conv")
 class Conv(nn.Module):
     """Enhanced convolution with potential accuracy improvements."""
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
@@ -49,7 +49,7 @@ class Conv(nn.Module):
         nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, x):
-        print("conv")
+        
         return self.act(self.bn(self.conv(x)))
     def forward_fuse(self, x):
         """Perform fused convolution."""
@@ -65,7 +65,6 @@ class Conv2(Conv):
         self.alpha = nn.Parameter(torch.tensor([0.5]))
         
     def forward(self, x):
-        print("con2")
         return self.act(self.bn(self.alpha * self.conv(x) + (1 - self.alpha) * self.cv2(x)))
     def forward_fuse(self, x):
         """Perform fused convolution."""
