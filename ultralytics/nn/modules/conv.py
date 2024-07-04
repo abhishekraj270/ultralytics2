@@ -33,53 +33,51 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
     return p
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-print("conv")
 class Conv(nn.Module):
-    """Enhanced convolution with potential accuracy improvements."""
+    """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
+
+    default_act = nn.SiLU()  # default activation
+
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
+        """Initialize Conv layer with given arguments including activation."""
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
-        
-        # Initialize weights using He initialization
-        nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
-        
+        self.act = self.default_act if act is True else act if isinstance(act, nn.Module) else nn.Identity()
+
     def forward(self, x):
-        
+        """Apply convolution, batch normalization and activation to input tensor."""
         return self.act(self.bn(self.conv(x)))
+
     def forward_fuse(self, x):
-        """Perform fused convolution."""
+        """Perform transposed convolution of 2D data."""
         return self.act(self.conv(x))
+
+
 class Conv2(Conv):
-    """Enhanced RepConv module with potential accuracy improvements."""
+    """Simplified RepConv module with Conv fusing."""
+
     def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True):
+        """Initialize Conv layer with given arguments including activation."""
         super().__init__(c1, c2, k, s, p, g=g, d=d, act=act)
-        self.cv2 = nn.Conv2d(c1, c2, 1, s, autopad(1, p, d), groups=g, dilation=d, bias=False)
-        nn.init.kaiming_normal_(self.cv2.weight, mode='fan_out', nonlinearity='relu')
-        
-        # Learnable parameter for weighted sum
-        self.alpha = nn.Parameter(torch.tensor([0.5]))
-        
+        self.cv2 = nn.Conv2d(c1, c2, 1, s, autopad(1, p, d), groups=g, dilation=d, bias=False)  # add 1x1 conv
+
     def forward(self, x):
-        return self.act(self.bn(self.alpha * self.conv(x) + (1 - self.alpha) * self.cv2(x)))
+        """Apply convolution, batch normalization and activation to input tensor."""
+        return self.act(self.bn(self.conv(x) + self.cv2(x)))
+
     def forward_fuse(self, x):
-        """Perform fused convolution."""
-        return self.act(self.conv(x))
+        """Apply fused convolution, batch normalization and activation to input tensor."""
+        return self.act(self.bn(self.conv(x)))
 
-    
     def fuse_convs(self):
-        w = self.alpha.item() * self.conv.weight.data + (1 - self.alpha.item()) * F.pad(self.cv2.weight.data, 
-                                                  [self.conv.weight.size(2)//2]*4, mode='constant', value=0)
-        self.conv.weight.data.copy_(w)
-        self.__delattr__('cv2')
-        self.__delattr__('alpha')
-        self.forward = super().forward
-
-
+        """Fuse parallel convolutions."""
+        w = torch.zeros_like(self.conv.weight.data)
+        i = [x // 2 for x in w.shape[2:]]
+        w[:, :, i[0] : i[0] + 1, i[1] : i[1] + 1] = self.cv2.weight.data.clone()
+        self.conv.weight.data += w
+        self.__delattr__("cv2")
+        self.forward = self.forward_fuse
 
 
 class LightConv(nn.Module):
