@@ -152,63 +152,29 @@ class KeypointLoss(nn.Module):
         e = d / ((2 * self.sigmas).pow(2) * (area + 1e-9) * 2)  # from cocoeval
         return (kpt_loss_factor.view(-1, 1) * ((1 - torch.exp(-e)) * kpt_mask)).mean()
 
-    def v8DetectionLoss(self, p, targets):
-    ft = torch.cuda.amp.autocast(enabled=self.amp)
-    loss_dict = self.loss_dict.copy()  # Create a copy of the loss dictionary
-    device = targets.device
-    lcls, lbox, lobj, lmask, lscore, lscore_sum = torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device), torch.zeros(1, device=device)
-    tcls, tbox, indices, anchors = self.build_targets(p, targets)  # targets
-    h = p.shape[2]
 
-    # Define class-specific weights
-    class_weights = torch.tensor([1.0, 1.0, 1.0, 1.0, 2.0, 2.0], device=device)  # Higher weights for classes 4 and 5
+class v8DetectionLoss:
+    """Criterion class for computing training losses."""
 
-    # Losses
-    with ft():
-        cls_loss, box_loss, obj_loss, mask_loss, score_loss = self.loss_dict['cls'], self.loss_dict['box'], self.loss_dict['obj'], self.loss_dict['mask'], self.loss_dict['score']
-        
-        # Apply class-specific weighting to classification loss
-        cls_loss = cls_loss * class_weights[tcls]
+    def __init__(self, model, tal_topk=10):  # model must be de-paralleled
+        """Initializes v8DetectionLoss with the model, defining model-related properties and BCE loss function."""
+        device = next(model.parameters()).device  # get model device
+        h = model.args  # hyperparameters
 
-        # Compute losses
-        lcls += cls_loss.mean()
-        lbox += box_loss.mean()
-        lobj += obj_loss.mean()
-        lmask += mask_loss.mean()
-        lscore += score_loss.mean()
-        lscore_sum += score_loss.sum()
+        m = model.model[-1]  # Detect() module
+        self.bce = nn.BCEWithLogitsLoss(reduction="none")
+        self.hyp = h
+        self.stride = m.stride  # model strides
+        self.nc = m.nc  # number of classes
+        self.no = m.nc + m.reg_max * 4
+        self.reg_max = m.reg_max
+        self.device = device
 
-    loss_dict['cls'] = lcls
-    loss_dict['box'] = lbox
-    loss_dict['obj'] = lobj
-    loss_dict['mask'] = lmask
-    loss_dict['score'] = lscore
-    loss_dict['score_sum'] = lscore_sum
+        self.use_dfl = m.reg_max > 1
 
-    return loss_dict
-
-# class v8DetectionLoss:
-#     """Criterion class for computing training losses."""
-
-#     def __init__(self, model, tal_topk=10):  # model must be de-paralleled
-#         """Initializes v8DetectionLoss with the model, defining model-related properties and BCE loss function."""
-#         device = next(model.parameters()).device  # get model device
-#         h = model.args  # hyperparameters
-
-#         m = model.model[-1]  # Detect() module
-#         self.bce = nn.BCEWithLogitsLoss(reduction="none")
-#         self.hyp = h
-#         self.stride = m.stride  # model strides
-#         self.nc = m.nc  # number of classes
-#         self.no = m.nc + m.reg_max * 4
-#         self.reg_max = m.reg_max
-#         self.device = device
-
-#         self.use_dfl = m.reg_max > 1
-
-#         self.assigner = TaskAlignedAssigner(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
-#         self.bbox_loss = BboxLoss(m.reg_max).to(device)
-#         self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
+        self.assigner = TaskAlignedAssigner(topk=tal_topk, num_classes=self.nc, alpha=0.5, beta=6.0)
+        self.bbox_loss = BboxLoss(m.reg_max).to(device)
+        self.proj = torch.arange(m.reg_max, dtype=torch.float, device=device)
 
     def preprocess(self, targets, batch_size, scale_tensor):
         """Preprocesses the target counts and matches with the input batch size to output a tensor."""
