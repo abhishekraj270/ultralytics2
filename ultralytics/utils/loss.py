@@ -132,7 +132,7 @@ def compute_bounding_box_areas(targets):
 
 
 class DFLoss(nn.Module):
-    """Criterion class for computing DFL losses during training."""
+    print("Criterion class for computing DFL losses during training.")
 
     def __init__(self, reg_max=16) -> None:
         """Initialize the DFL module."""
@@ -159,7 +159,7 @@ class DFLoss(nn.Module):
 
 class BboxLoss(nn.Module):
     """Criterion class for computing training losses during training."""
-
+    print("bbloss")
     def __init__(self, reg_max=16):
         """Initialize the BboxLoss module with regularization maximum and DFL settings."""
         super().__init__()
@@ -224,6 +224,7 @@ class KeypointLoss(nn.Module):
 
 
 class v8DetectionLoss:
+    print("v8 detection loss")
     """Criterion class for computing training losses."""
 
     def __init__(self, model, tal_topk=10):  # model must be de-paralleled
@@ -328,6 +329,7 @@ class v8DetectionLoss:
 
 
 class v8SegmentationLoss(v8DetectionLoss):
+    print("v8 seg loss")
     """Criterion class for computing training losses."""
 
     def __init__(self, model):  # model must be de-paralleled
@@ -512,7 +514,7 @@ class v8SegmentationLoss(v8DetectionLoss):
 
 class v8PoseLoss(v8DetectionLoss):
     """Criterion class for computing training losses."""
-
+    print("v8poseloss")
     def __init__(self, model):  # model must be de-paralleled
         """Initializes v8PoseLoss with model, sets keypoint variables and declares a keypoint loss instance."""
         super().__init__(model)
@@ -662,7 +664,7 @@ class v8PoseLoss(v8DetectionLoss):
 
             if pred_kpt.shape[-1] == 3:
                 kpts_obj_loss = self.bce_pose(pred_kpt[..., 2], kpt_mask.float())  # keypoint obj loss
-
+        print("calculate_keypoints_loss")
         return kpts_loss, kpts_obj_loss
 
 
