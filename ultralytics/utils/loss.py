@@ -33,6 +33,7 @@ class VarifocalLoss(nn.Module):
                 .mean(1)
                 .sum()
             )
+            print("vfl")
         return loss
 class FocalLoss(nn.Module):
     def __init__(self, gamma=2.0, alpha=0.25, lambda_=0.5, k=1.0):
