@@ -93,7 +93,6 @@ class BboxLoss(nn.Module):
         self.reg_max = reg_max
         self.small_object_weight = small_object_weight
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
-
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
         
@@ -102,6 +101,11 @@ class BboxLoss(nn.Module):
         
         # Apply higher weight to small objects
         small_object_mask = bbox_areas < 0.02  # Adjust threshold as needed
+        small_object_mask = small_object_mask[fg_mask]  # Apply fg_mask to small_object_mask
+        
+        # Ensure small_object_mask has the same shape as weight
+        small_object_mask = small_object_mask.view(-1, 1)
+        
         weight = weight * (1 + self.small_object_weight * small_object_mask.float())
         
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
