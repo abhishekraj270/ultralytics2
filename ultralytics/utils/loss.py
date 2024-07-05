@@ -129,32 +129,71 @@ def compute_bounding_box_areas(targets):
 #             alpha_factor = label * alpha + (1 - label) * (1 - alpha)
 #             loss *= alpha_factor
 #         return loss.mean(1).sum()
-
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
 class DFLoss(nn.Module):
-    print("Criterion class for computing DFL losses during training.")
-
-    def __init__(self, reg_max=16) -> None:
-        """Initialize the DFL module."""
+    def __init__(self, reg_max=16, alpha=0.5, gamma=2.0) -> None:
+        """Initialize the DFL module with focal loss parameters."""
         super().__init__()
         self.reg_max = reg_max
+        self.alpha = alpha
+        self.gamma = gamma
 
-    def __call__(self, pred_dist, target):
+    def forward(self, pred_dist, target):
         """
-        Return sum of left and right DFL losses.
-
-        Distribution Focal Loss (DFL) proposed in Generalized Focal Loss
-        https://ieeexplore.ieee.org/document/9792391
+        Return sum of left and right DFL losses with focal loss modification.
         """
         target = target.clamp_(0, self.reg_max - 1 - 0.01)
         tl = target.long()  # target left
         tr = tl + 1  # target right
         wl = tr - target  # weight left
         wr = 1 - wl  # weight right
-        return (
-            F.cross_entropy(pred_dist, tl.view(-1), reduction="none").view(tl.shape) * wl
-            + F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape) * wr
+
+        # Calculate focal weights
+        pred_prob = F.softmax(pred_dist, dim=-1)
+        pt_l = pred_prob.gather(-1, tl.unsqueeze(-1)).squeeze(-1)
+        pt_r = pred_prob.gather(-1, tr.unsqueeze(-1)).squeeze(-1)
+        focal_weight_l = (1 - pt_l) ** self.gamma
+        focal_weight_r = (1 - pt_r) ** self.gamma
+
+        # Calculate losses with focal weighting
+        loss_l = F.cross_entropy(pred_dist, tl.view(-1), reduction="none").view(tl.shape)
+        loss_r = F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape)
+
+        # Combine losses with weights and focal loss
+        loss = (
+            (loss_l * wl * focal_weight_l * self.alpha +
+             loss_r * wr * focal_weight_r * (1 - self.alpha))
         ).mean(-1, keepdim=True)
+
+        return loss
+
+# class DFLoss(nn.Module):
+#     print("Criterion class for computing DFL losses during training.")
+
+#     def __init__(self, reg_max=16) -> None:
+#         """Initialize the DFL module."""
+#         super().__init__()
+#         self.reg_max = reg_max
+
+#     def __call__(self, pred_dist, target):
+#         """
+#         Return sum of left and right DFL losses.
+
+#         Distribution Focal Loss (DFL) proposed in Generalized Focal Loss
+#         https://ieeexplore.ieee.org/document/9792391
+#         """
+#         target = target.clamp_(0, self.reg_max - 1 - 0.01)
+#         tl = target.long()  # target left
+#         tr = tl + 1  # target right
+#         wl = tr - target  # weight left
+#         wr = 1 - wl  # weight right
+#         return (
+#             F.cross_entropy(pred_dist, tl.view(-1), reduction="none").view(tl.shape) * wl
+#             + F.cross_entropy(pred_dist, tr.view(-1), reduction="none").view(tl.shape) * wr
+#         ).mean(-1, keepdim=True)
 
 
 class BboxLoss(nn.Module):
