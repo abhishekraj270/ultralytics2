@@ -740,12 +740,12 @@ class v8OBBLoss(v8DetectionLoss):
         return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
     
     def bbox_decode(self, anchor_points, pred_dist):
-    if self.use_dfl:
-        b, a, c = pred_dist.shape
-        # Move self.proj to the same device as pred_dist
-        proj = self.proj.to(pred_dist.device).type(pred_dist.dtype)
-        pred_dist = pred_dist.view(b, a, 4, c // 4).softmax(3).matmul(proj)
-    return dist2bbox(pred_dist, anchor_points, xywh=False)
+        if self.use_dfl:
+            b, a, c = pred_dist.shape
+            # Move self.proj to the same device as pred_dist
+            proj = self.proj.to(pred_dist.device).type(pred_dist.dtype)
+            pred_dist = pred_dist.view(b, a, 4, c // 4).softmax(3).matmul(proj)
+        return dist2bbox(pred_dist, anchor_points, xywh=False)
     
     def bbox_decode(self, anchor_points, pred_dist, pred_angle):
         """
