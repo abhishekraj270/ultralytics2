@@ -44,7 +44,7 @@ class Conv(nn.Module):
         
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
-
+print("COnv & conv2")
 class Conv2(Conv):
     """Enhanced RepConv module with potential accuracy improvements."""
     def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True):
