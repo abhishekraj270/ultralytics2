@@ -129,9 +129,6 @@ def compute_bounding_box_areas(targets):
 #             alpha_factor = label * alpha + (1 - label) * (1 - alpha)
 #             loss *= alpha_factor
 #         return loss.mean(1).sum()
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
 
 class DFLoss(nn.Module):
     def __init__(self, reg_max=16, alpha=0.5, gamma=2.0) -> None:
