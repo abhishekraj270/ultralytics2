@@ -88,29 +88,33 @@ class DFLoss(nn.Module):
 
 
 class BboxLoss(nn.Module):
-    """Criterion class for computing training losses during training."""
-
-    def __init__(self, reg_max=16):
-        """Initialize the BboxLoss module with regularization maximum and DFL settings."""
+    def __init__(self, reg_max=16, small_object_weight=2.0):
         super().__init__()
+        self.reg_max = reg_max
+        self.small_object_weight = small_object_weight
         self.dfl_loss = DFLoss(reg_max) if reg_max > 1 else None
 
     def forward(self, pred_dist, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask):
-        """IoU loss."""
         weight = target_scores.sum(-1)[fg_mask].unsqueeze(-1)
+        
+        # Calculate bbox areas
+        bbox_areas = (target_bboxes[..., 2] - target_bboxes[..., 0]) * (target_bboxes[..., 3] - target_bboxes[..., 1])
+        
+        # Apply higher weight to small objects
+        small_object_mask = bbox_areas < 0.02  # Adjust threshold as needed
+        weight = weight * (1 + self.small_object_weight * small_object_mask.float())
+        
         iou = bbox_iou(pred_bboxes[fg_mask], target_bboxes[fg_mask], xywh=False, CIoU=True)
         loss_iou = ((1.0 - iou) * weight).sum() / target_scores_sum
 
-        # DFL loss
         if self.dfl_loss:
-            target_ltrb = bbox2dist(anchor_points, target_bboxes, self.dfl_loss.reg_max - 1)
-            loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.dfl_loss.reg_max), target_ltrb[fg_mask]) * weight
+            target_ltrb = bbox2dist(anchor_points, target_bboxes, self.reg_max - 1)
+            loss_dfl = self.dfl_loss(pred_dist[fg_mask].view(-1, self.reg_max), target_ltrb[fg_mask]) * weight
             loss_dfl = loss_dfl.sum() / target_scores_sum
         else:
             loss_dfl = torch.tensor(0.0).to(pred_dist.device)
 
         return loss_iou, loss_dfl
-
 
 class RotatedBboxLoss(BboxLoss):
     """Criterion class for computing training losses during training."""
@@ -249,13 +253,12 @@ class v8DetectionLoss:
             loss[0], loss[2] = self.bbox_loss(
                 pred_distri, pred_bboxes, anchor_points, target_bboxes, target_scores, target_scores_sum, fg_mask
             )
-
-        loss[0] *= self.hyp.box  # box gain
-        loss[1] *= self.hyp.cls  # cls gain
-        loss[2] *= self.hyp.dfl  # dfl gain
-
-        return loss.sum() * batch_size, loss.detach()  # loss(box, cls, dfl)
-
+            
+        loss[0] *= self.hyp.box * 1.5  # Increase box loss weight
+        loss[1] *= self.hyp.cls * 1.2  # Increase classification loss weight
+        loss[2] *= self.hyp.dfl * 1.2  # Increase DFL loss weight
+    
+        return loss.sum() * batch_size, loss.detach()
 
 class v8SegmentationLoss(v8DetectionLoss):
     """Criterion class for computing training losses."""
