@@ -37,7 +37,7 @@ class Conv(nn.Module):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.SiLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
+        self.act = nn.LeakyReLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
         
         # Initialize weights using He initialization
         nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
@@ -69,7 +69,7 @@ class Conv2(Conv):
 # class Conv(nn.Module):
 #     """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
 
-#     default_act = nn.SiLU()  # default activation
+#     default_act = nn.LeakyReLU()  # default activation
 
 #     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
 #         """Initialize Conv layer with given arguments including activation."""
@@ -150,7 +150,7 @@ class DWConvTranspose2d(nn.ConvTranspose2d):
 class ConvTranspose(nn.Module):
     """Convolution transpose 2d layer."""
 
-    default_act = nn.SiLU()  # default activation
+    default_act = nn.LeakyReLU()  # default activation
 
     def __init__(self, c1, c2, k=2, s=2, p=0, bn=True, act=True):
         """Initialize ConvTranspose2d layer with batch normalization and activation function."""
@@ -213,7 +213,7 @@ class RepConv(nn.Module):
     Based on https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py
     """
 
-    default_act = nn.SiLU()  # default activation
+    default_act = nn.LeakyReLU()  # default activation
 
     def __init__(self, c1, c2, k=3, s=1, p=1, g=1, d=1, act=True, bn=False, deploy=False):
         """Initializes Light Convolution layer with inputs, outputs & optional activation function."""
