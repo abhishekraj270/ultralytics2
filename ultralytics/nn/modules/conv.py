@@ -2,10 +2,10 @@
 """Convolution modules."""
 
 import math
-
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 __all__ = (
     "Conv",
@@ -23,7 +23,6 @@ __all__ = (
     "RepConv",
 )
 
-
 def autopad(k, p=None, d=1):  # kernel, padding, dilation
     """Pad to 'same' shape outputs."""
     if d > 1:
@@ -31,20 +30,24 @@ def autopad(k, p=None, d=1):  # kernel, padding, dilation
     if p is None:
         p = k // 2 if isinstance(k, int) else [x // 2 for x in k]  # auto-pad
     return p
+
 class Conv(nn.Module):
     """Enhanced convolution with potential accuracy improvements."""
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
         self.bn = nn.BatchNorm2d(c2)
-        self.act = nn.LeakyReLU() if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
+        # Use LeakyReLU activation
+        self.act = nn.LeakyReLU(negative_slope=0.01) if act is True else (act if isinstance(act, nn.Module) else nn.Identity())
         
         # Initialize weights using He initialization
         nn.init.kaiming_normal_(self.conv.weight, mode='fan_out', nonlinearity='relu')
         
     def forward(self, x):
         return self.act(self.bn(self.conv(x)))
-print("COnv & conv2")
+
+print("Conv & Conv2")
+
 class Conv2(Conv):
     """Enhanced RepConv module with potential accuracy improvements."""
     def __init__(self, c1, c2, k=3, s=1, p=None, g=1, d=1, act=True):
@@ -69,7 +72,7 @@ class Conv2(Conv):
 # class Conv(nn.Module):
 #     """Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)."""
 
-#     default_act = nn.LeakyReLU()  # default activation
+#     default_act = nn.SiLU()  # default activation
 
 #     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, act=True):
 #         """Initialize Conv layer with given arguments including activation."""
@@ -113,14 +116,12 @@ class Conv2(Conv):
 #         self.forward = self.forward_fuse
 
 
+
 class LightConv(nn.Module):
     """
     Light convolution with args(ch_in, ch_out, kernel).
-
-    https://github.com/PaddlePaddle/PaddleDetection/blob/develop/ppdet/modeling/backbones/hgnet_v2.py
     """
-
-    def __init__(self, c1, c2, k=1, act=nn.ReLU()):
+    def __init__(self, c1, c2, k=1, act=nn.LeakyReLU(negative_slope=0.01)):
         """Initialize Conv layer with given arguments including activation."""
         super().__init__()
         self.conv1 = Conv(c1, c2, 1, act=False)
@@ -130,14 +131,12 @@ class LightConv(nn.Module):
         """Apply 2 convolutions to input tensor."""
         return self.conv2(self.conv1(x))
 
-
 class DWConv(Conv):
     """Depth-wise convolution."""
 
     def __init__(self, c1, c2, k=1, s=1, d=1, act=True):  # ch_in, ch_out, kernel, stride, dilation, activation
         """Initialize Depth-wise convolution with given parameters."""
         super().__init__(c1, c2, k, s, g=math.gcd(c1, c2), d=d, act=act)
-
 
 class DWConvTranspose2d(nn.ConvTranspose2d):
     """Depth-wise transpose convolution."""
@@ -146,11 +145,10 @@ class DWConvTranspose2d(nn.ConvTranspose2d):
         """Initialize DWConvTranspose2d class with given parameters."""
         super().__init__(c1, c2, k, s, p1, p2, groups=math.gcd(c1, c2))
 
-
 class ConvTranspose(nn.Module):
     """Convolution transpose 2d layer."""
 
-    default_act = nn.LeakyReLU()  # default activation
+    default_act = nn.LeakyReLU(negative_slope=0.01)  # default activation
 
     def __init__(self, c1, c2, k=2, s=2, p=0, bn=True, act=True):
         """Initialize ConvTranspose2d layer with batch normalization and activation function."""
@@ -166,7 +164,6 @@ class ConvTranspose(nn.Module):
     def forward_fuse(self, x):
         """Applies activation and convolution transpose operation to input."""
         return self.act(self.conv_transpose(x))
-
 
 class Focus(nn.Module):
     """Focus wh information into c-space."""
@@ -186,7 +183,6 @@ class Focus(nn.Module):
         return self.conv(torch.cat((x[..., ::2, ::2], x[..., 1::2, ::2], x[..., ::2, 1::2], x[..., 1::2, 1::2]), 1))
         # return self.conv(self.contract(x))
 
-
 class GhostConv(nn.Module):
     """Ghost Convolution https://github.com/huawei-noah/ghostnet."""
 
@@ -204,7 +200,6 @@ class GhostConv(nn.Module):
         y = self.cv1(x)
         return torch.cat((y, self.cv2(y)), 1)
 
-
 class RepConv(nn.Module):
     """
     RepConv is a basic rep-style block, including training and deploy status.
@@ -213,7 +208,7 @@ class RepConv(nn.Module):
     Based on https://github.com/DingXiaoH/RepVGG/blob/main/repvgg.py
     """
 
-    default_act = nn.LeakyReLU()  # default activation
+    default_act = nn.LeakyReLU(negative_slope=0.01)  # default activation
 
     def __init__(self, c1, c2, k=3, s=1, p=1, g=1, d=1, act=True, bn=False, deploy=False):
         """Initializes Light Convolution layer with inputs, outputs & optional activation function."""
@@ -306,7 +301,6 @@ class RepConv(nn.Module):
             self.__delattr__("bn")
         if hasattr(self, "id_tensor"):
             self.__delattr__("id_tensor")
-
 
 class ChannelAttention(nn.Module):
     """Channel-attention module https://github.com/open-mmlab/mmdetection/tree/v3.0.0rc1/configs/rtmdet."""
